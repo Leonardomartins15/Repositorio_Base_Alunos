@@ -1,0 +1,21 @@
+# Escreva um código que pede ao usuário a altura e o peso e faça o cálculo do IMC (Índice de massa corporal) do usuário.
+# Dica:
+# Para calcular o IMC você deve dividir o peso pela altura ao quadrado
+# imc = peso / (altura ** 2)
+
+
+# OUTPUT ESPERADO:
+
+# Digite sua altura: 1.78
+# Digite seu peso: 85
+# O seu IMC é: 26.83
+
+# ------------------------------------------ ESCREVA SEU CÓDIGO ABAIXO -----------------------------------------------------------
+
+altura_usuario = float(input("Digite a altura do usuário :"))
+peso_usuario = float(input("Digite o peso do usuário :"))
+imc = peso_usuario / (altura_usuario ** 2)
+
+print(f"Sua altura : {altura_usuario}")
+print(f"Seu peso : {peso_usuario}")
+print(f"O seu IMC é : {imc:.2f}")

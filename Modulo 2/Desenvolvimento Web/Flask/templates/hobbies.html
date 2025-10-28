@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Hoobies — Lista de Hobbies</title>
+  <style>
+    :root{--bg:#0f172a;--card:#0b1220;--muted:#94a3b8;--accent:#7c3aed;--glass: rgba(255,255,255,0.03)}
+    *{box-sizing:border-box}
+    body{font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; margin:0; min-height:100vh; background:linear-gradient(180deg,#071021 0%, #09203a 100%); color:#e6eef8; padding:32px;}
+    .wrap{max-width:900px;margin:0 auto}
+    header{display:flex;align-items:center;gap:16px;margin-bottom:20px}
+    h1{font-size:1.6rem;margin:0}
+    p.lead{margin:0;color:var(--muted)}
+
+    .card{background:var(--card);padding:18px;border-radius:12px;box-shadow:0 6px 20px rgba(2,6,23,0.6);}
+    form{display:flex;gap:10px;flex-wrap:wrap}
+    input[type="text"]{flex:1;min-width:180px;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit}
+    button{padding:10px 14px;border-radius:8px;border:0;background:linear-gradient(90deg,var(--accent),#4c1d95);color:white;cursor:pointer}
+    button.secondary{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted)}
+
+    .controls{display:flex;gap:8px;align-items:center;margin-top:12px}
+    .list{margin-top:18px;display:grid;gap:8px}
+    .item{display:flex;align-items:center;gap:12px;padding:10px;border-radius:10px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border:1px solid rgba(255,255,255,0.03)}
+    .drag{cursor:grab;padding:6px;border-radius:6px;font-size:0.9rem}
+    .name{flex:1}
+    .actions{display:flex;gap:6px}
+    .small{font-size:0.85rem;padding:6px 8px}
+
+    .muted{color:var(--muted);font-size:0.9rem}
+    .empty{padding:24px;text-align:center;color:var(--muted)}
+
+    footer{margin-top:16px;color:var(--muted);font-size:0.85rem}
+
+    @media (max-width:520px){header{flex-direction:column;align-items:flex-start}form{flex-direction:column} .controls{flex-direction:column;align-items:stretch} .actions{gap:4px}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>Hoobies</h1>
+        <p class="lead">Organize sua lista de hobbies — adicionar, editar, remover e salvar localmente.</p>
+      </div>
+    </header>
+
+    <section class="card" aria-labelledby="form-title">
+      <h2 id="form-title" style="font-size:1rem;margin-bottom:8px">Adicionar novo hobby</h2>
+
+      <form id="hobby-form">
+        <input id="hobby-input" type="text" placeholder="Ex: Caminhar, Pintura, Programação..." aria-label="Novo hobby" required />
+        <button id="add-btn" type="submit">Adicionar</button>
+        <div class="controls">
+          <button id="clear-btn" type="button" class="secondary small">Limpar todos</button>
+          <button id="export-btn" type="button" class="secondary small">Exportar (.json)</button>
+          <label for="import-file" class="secondary small" style="cursor:pointer">Importar (.json)</label>
+          <input id="import-file" type="file" accept="application/json" style="display:none" />
+        </div>
+      </form>
+
+      <div id="list" class="list" aria-live="polite" style="margin-top:12px"></div>
+      <div id="empty" class="empty" hidden>Sem hobbies — adicione o primeiro acima ✨</div>
+      <footer>Os hobbies são salvos automaticamente no seu navegador usando <code>localStorage</code>.</footer>
+    </section>
+  </div>
+
+  <script>
+    // Key for localStorage
+    const STORAGE_KEY = 'hoobies_list_v1';
+
+    // Elements
+    const form = document.getElementById('hobby-form');
+    const input = document.getElementById('hobby-input');
+    const listEl = document.getElementById('list');
+    const emptyEl = document.getElementById('empty');
+    const clearBtn = document.getElementById('clear-btn');
+    const exportBtn = document.getElementById('export-btn');
+    const importFile = document.getElementById('import-file');
+
+    // State
+    let hobbies = load();
+
+    // Initialize
+    render();
+
+    // Add
+    form.addEventListener('submit', e => {
+      e.preventDefault();
+      const text = input.value.trim();
+      if(!text) return;
+      hobbies.push({id: cryptoRandomId(), name: text});
+      input.value = '';
+      save(); render();
+    });
+
+    // Clear
+    clearBtn.addEventListener('click', () => {
+      if(!confirm('Deseja realmente limpar todos os hobbies?')) return;
+      hobbies = [];
+      save(); render();
+    });
+
+    // Export
+    exportBtn.addEventListener('click', () => {
+      const blob = new Blob([JSON.stringify(hobbies, null, 2)], {type:'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'hoobies.json';
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    });
+
+    // Import
+    importFile.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if(!file) return;
+      try{
+        const text = await file.text();
+        const parsed = JSON.parse(text);
+        if(!Array.isArray(parsed)) throw new Error('Arquivo inválido');
+        // normalize and merge
+        const normalized = parsed.map(p => ({id: p.id || cryptoRandomId(), name: String(p.name || p)}));
+        hobbies = normalized;
+        save(); render();
+        importFile.value = '';
+      }catch(err){
+        alert('Erro ao importar: ' + err.message);
+      }
+    });
+
+    // Helpers
+    function render(){
+      listEl.innerHTML = '';
+      if(hobbies.length === 0){ emptyEl.hidden = false; return; } else emptyEl.hidden = true;
+
+      hobbies.forEach((h, idx) => {
+        const item = document.createElement('div');
+        item.className = 'item';
+        item.draggable = true;
+        item.dataset.id = h.id;
+
+        const drag = document.createElement('div');
+        drag.className = 'drag';
+        drag.title = 'Arraste para reordenar';
+        drag.textContent = '≡';
+
+        const name = document.createElement('div');
+        name.className = 'name';
+        name.textContent = h.name;
+
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+
+        const editBtn = document.createElement('button');
+        editBtn.className = 'small';
+        editBtn.textContent = 'Editar';
+        editBtn.addEventListener('click', () => editHobby(h.id));
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'small';
+        delBtn.textContent = 'Remover';
+        delBtn.addEventListener('click', () => {
+          if(!confirm('Remover este hobby?')) return;
+          hobbies = hobbies.filter(x => x.id !== h.id);
+          save(); render();
+        });
+
+        actions.appendChild(editBtn);
+        actions.appendChild(delBtn);
+
+        item.appendChild(drag);
+        item.appendChild(name);
+        item.appendChild(actions);
+
+        // Drag events for reordering
+        item.addEventListener('dragstart', (ev) => {
+          ev.dataTransfer.setData('text/plain', h.id);
+          ev.dataTransfer.effectAllowed = 'move';
+          item.style.opacity = '0.6';
+        });
+        item.addEventListener('dragend', () => item.style.opacity = '1');
+
+        item.addEventListener('dragover', (ev) => { ev.preventDefault(); });
+        item.addEventListener('drop', (ev) => {
+          ev.preventDefault();
+          const draggedId = ev.dataTransfer.getData('text/plain');
+          if(!draggedId) return;
+          reorder(draggedId, h.id);
+        });
+
+        listEl.appendChild(item);
+      });
+    }
+
+    function editHobby(id){
+      const h = hobbies.find(x => x.id === id);
+      if(!h) return;
+      const newName = prompt('Editar hobby', h.name);
+      if(newName === null) return;
+      const trimmed = newName.trim();
+      if(!trimmed) { alert('Nome vazio não permitido'); return; }
+      h.name = trimmed;
+      save(); render();
+    }
+
+    function reorder(draggedId, targetId){
+      const from = hobbies.findIndex(x => x.id === draggedId);
+      const to = hobbies.findIndex(x => x.id === targetId);
+      if(from < 0 || to < 0 || from === to) return;
+      const [item] = hobbies.splice(from,1);
+      hobbies.splice(to,0,item);
+      save(); render();
+    }
+
+    function save(){
+      try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(hobbies)); }
+      catch(e){ console.warn('Erro ao salvar localStorage', e); }
+    }
+
+    function load(){
+      try{
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if(!raw) return [];
+        const parsed = JSON.parse(raw);
+        if(!Array.isArray(parsed)) return [];
+        return parsed.map(p => ({id: p.id || cryptoRandomId(), name: String(p.name || p)}));
+      }catch(e){ console.warn('Erro ao carregar', e); return []; }
+    }
+
+    function cryptoRandomId(){
+      // fallback-friendly small id
+      try{ return crypto.randomUUID(); }catch(e){ return Math.random().toString(36).slice(2,9); }
+    }
+
+    // Keyboard accessibility: focus first input on load
+    input.focus();
+  </script>
+</body>
+</html>

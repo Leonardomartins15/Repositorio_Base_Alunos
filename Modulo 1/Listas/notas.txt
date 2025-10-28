@@ -1,0 +1,4 @@
+leonardo, 8.5
+rodrigo, 7.0
+yasmim, 9.2
+Daniel, 6.8 
